@@ -35,7 +35,27 @@ export const listSalesQuerySchema = paginationSchema.extend({
   to: z.coerce.date().optional(),
 });
 
+// One line of a return: which sale line (by batch) and how many units to give back.
+const returnItemSchema = z.object({
+  batchId: objectId,
+  qty: z.number().int().positive(),
+});
+
+export const createReturnSchema = z.object({
+  items: z.array(returnItemSchema).min(1),
+  reason: z.string().max(500).optional(),
+});
+
+export const listReturnsQuerySchema = paginationSchema.extend({
+  branchId: objectId.optional(),
+  saleId: objectId.optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+});
+
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
 export type OfflineSaleInput = z.infer<typeof offlineSaleSchema>;
 export type BulkSyncInput = z.infer<typeof bulkSyncSchema>;
 export type ListSalesQuery = z.infer<typeof listSalesQuerySchema>;
+export type CreateReturnInput = z.infer<typeof createReturnSchema>;
+export type ListReturnsQuery = z.infer<typeof listReturnsQuerySchema>;

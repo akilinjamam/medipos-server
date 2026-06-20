@@ -1,4 +1,4 @@
-import { FilterQuery } from 'mongoose';
+import { FilterQuery, Types } from 'mongoose';
 import { Batch, BatchDoc } from './batch.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { ApiError } from '../../utils/ApiError';
@@ -8,6 +8,7 @@ import {
   ListBatchesQuery,
   FefoQuery,
   NearExpiryQuery,
+  LowStockQuery,
 } from './batch.validation';
 
 export interface FefoAllocationLine {
@@ -25,6 +26,16 @@ export interface FefoAllocation {
   allocated: number;
   fulfillable: boolean;
   lines: FefoAllocationLine[];
+}
+
+export interface LowStockRow {
+  productId: Types.ObjectId;
+  branchId: Types.ObjectId;
+  name: string;
+  totalStock: number;
+  reorderLevel: number;
+  /** How far below the reorder level (reorderLevel - totalStock), ≥ 0. */
+  shortfall: number;
 }
 
 /**
@@ -129,5 +140,56 @@ export const batchService = {
     if (query.branchId) filter.branchId = query.branchId;
 
     return withTenant(Batch.find(filter), tenantId).sort({ expiryDate: 1 });
+  },
+
+  /**
+   * Low-stock scan (design doc §10): per product/branch, total on-hand stock
+   * across batches against the product's `reorderLevel`. Drives reorder alerts
+   * (dashboard flag + the daily SMS job). Aggregation is not auto tenant-scoped,
+   * so `tenantId` is matched explicitly. Products with a `reorderLevel` of 0 are
+   * excluded (no reorder threshold set); a product with no batches in a branch
+   * is treated as not stocked there and won't appear.
+   */
+  async lowStock(tenantId: string, query: LowStockQuery): Promise<LowStockRow[]> {
+    const match: Record<string, unknown> = { tenantId: new Types.ObjectId(tenantId) };
+    if (query.branchId) match.branchId = new Types.ObjectId(query.branchId);
+
+    return Batch.aggregate<LowStockRow>([
+      { $match: match },
+      {
+        $group: {
+          _id: { productId: '$productId', branchId: '$branchId' },
+          totalStock: { $sum: '$quantityInStock' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id.productId',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: '$product' },
+      {
+        $match: {
+          'product.isActive': true,
+          'product.reorderLevel': { $gt: 0 },
+          $expr: { $lte: ['$totalStock', '$product.reorderLevel'] },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          productId: '$_id.productId',
+          branchId: '$_id.branchId',
+          name: '$product.name',
+          totalStock: 1,
+          reorderLevel: '$product.reorderLevel',
+          shortfall: { $subtract: ['$product.reorderLevel', '$totalStock'] },
+        },
+      },
+      { $sort: { shortfall: -1 } },
+    ]);
   },
 };

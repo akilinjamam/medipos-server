@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { DailySummary, DailySummaryDoc } from './dailySummary.model';
 import { Sale } from '../sales/sale.model';
+import { SaleReturn } from '../sales/saleReturn.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { batchService } from '../batches/batch.service';
 import { DateRangeQuery, MoversQuery, ExpiryQuery } from './report.validation';
@@ -109,6 +110,11 @@ export const reportService = {
   /**
    * Rebuild the DailySummary rows for a single day (the nightly cron job's
    * unit of work; also exposed for manual backfill). Upserts one doc per branch.
+   *
+   * Returns processed on the day are netted out — refunded revenue, cost, and
+   * reversed due are subtracted — so profit/loss reflects refunds. A branch with
+   * only returns (for sales from an earlier day) still gets a row with the
+   * negative adjustment.
    */
   async rebuildDailySummary(tenantId: string, date: Date): Promise<number> {
     const start = startOfUtcDay(date);
@@ -141,28 +147,78 @@ export const reportService = {
       },
     ]);
 
-    const costByBranch = new Map<string, number>(
-      itemLevel.map((r) => [String(r._id), r.totalCost as number]),
-    );
+    // Returns processed this day: refunded revenue + reversed due per branch.
+    const returnLevel = await SaleReturn.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$branchId',
+          returnedRevenue: { $sum: '$refundAmount' },
+          returnedDue: { $sum: '$dueReversed' },
+        },
+      },
+    ]);
 
-    for (const row of saleLevel) {
-      const totalCost = costByBranch.get(String(row._id)) ?? 0;
-      const grossProfit = row.totalRevenue - totalCost;
+    // Cost of returned goods per branch (needs the return line items).
+    const returnItemLevel = await SaleReturn.aggregate([
+      { $match: match },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$branchId',
+          returnedCost: { $sum: { $multiply: ['$items.costPrice', '$items.qty'] } },
+        },
+      },
+    ]);
+
+    interface Bucket {
+      transactionCount: number;
+      totalRevenue: number;
+      totalCost: number;
+      totalDue: number;
+    }
+    const byBranch = new Map<string, Bucket>();
+    const bucket = (id: unknown): Bucket => {
+      const key = String(id);
+      let b = byBranch.get(key);
+      if (!b) {
+        b = { transactionCount: 0, totalRevenue: 0, totalCost: 0, totalDue: 0 };
+        byBranch.set(key, b);
+      }
+      return b;
+    };
+
+    for (const r of saleLevel) {
+      const b = bucket(r._id);
+      b.transactionCount += r.transactionCount;
+      b.totalRevenue += r.totalRevenue;
+      b.totalDue += r.totalDue;
+    }
+    for (const r of itemLevel) bucket(r._id).totalCost += r.totalCost;
+    for (const r of returnLevel) {
+      const b = bucket(r._id);
+      b.totalRevenue -= r.returnedRevenue;
+      b.totalDue -= r.returnedDue;
+    }
+    for (const r of returnItemLevel) bucket(r._id).totalCost -= r.returnedCost;
+
+    for (const [branchId, t] of byBranch) {
+      const grossProfit = t.totalRevenue - t.totalCost;
       await DailySummary.updateOne(
-        { tenantId: tid, branchId: row._id, date: start },
+        { tenantId: tid, branchId: new Types.ObjectId(branchId), date: start },
         {
           $set: {
-            transactionCount: row.transactionCount,
-            totalRevenue: row.totalRevenue,
-            totalCost,
+            transactionCount: t.transactionCount,
+            totalRevenue: t.totalRevenue,
+            totalCost: t.totalCost,
             grossProfit,
-            totalDue: row.totalDue,
+            totalDue: t.totalDue,
           },
         },
         { upsert: true },
       );
     }
 
-    return saleLevel.length;
+    return byBranch.size;
   },
 };

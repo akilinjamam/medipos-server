@@ -7,6 +7,7 @@ import {
   listBatchesQuerySchema,
   fefoQuerySchema,
   nearExpiryQuerySchema,
+  lowStockQuerySchema,
 } from './batch.validation';
 
 export const batchController = {
@@ -48,5 +49,11 @@ export const batchController = {
     const query = nearExpiryQuerySchema.parse(req.query);
     const batches = await batchService.nearExpiry(req.tenantId!, query);
     res.json({ data: batches });
+  }),
+
+  lowStock: asyncHandler(async (req: Request, res: Response) => {
+    const query = lowStockQuerySchema.parse(req.query);
+    const rows = await batchService.lowStock(req.tenantId!, query);
+    res.json({ data: rows });
   }),
 };

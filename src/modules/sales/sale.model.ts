@@ -12,7 +12,12 @@ export interface SaleItem {
   discount: number;
   /** Cost snapshot at sale time (from the batch) — powers profit reports. */
   costPrice: number;
+  /** How much of this line has been returned/refunded so far (≤ qty). */
+  returnedQty: number;
 }
+
+/** Lifecycle of a sale with respect to returns. */
+export type ReturnStatus = 'none' | 'partial' | 'full';
 
 export interface SaleDoc extends Document {
   _id: Types.ObjectId;
@@ -25,6 +30,9 @@ export interface SaleDoc extends Document {
   paidAmount: number;
   dueAmount: number;
   paymentMethod: PaymentMethod;
+  /** Return lifecycle + total value refunded across all returns of this sale. */
+  returnStatus: ReturnStatus;
+  refundedAmount: number;
   /** True when this sale originated offline and arrived via bulk-sync (§9). */
   syncedFromOffline: boolean;
   /** Client-generated UUID for offline sales — makes sync idempotent (§9). */
@@ -42,6 +50,7 @@ const saleItemSchema = new Schema<SaleItem>(
     unitPrice: { type: Number, required: true, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     costPrice: { type: Number, required: true, min: 0 },
+    returnedQty: { type: Number, default: 0, min: 0 },
   },
   { _id: false },
 );
@@ -60,6 +69,8 @@ const saleSchema = new Schema<SaleDoc>(
       enum: ['cash', 'bkash', 'nagad', 'card', 'due'],
       required: true,
     },
+    returnStatus: { type: String, enum: ['none', 'partial', 'full'], default: 'none' },
+    refundedAmount: { type: Number, default: 0, min: 0 },
     syncedFromOffline: { type: Boolean, default: false },
     clientUuid: { type: String },
   },

@@ -41,8 +41,13 @@ export const nearExpiryQuerySchema = z.object({
   withinDays: z.coerce.number().int().positive().max(365).default(30),
 });
 
+export const lowStockQuerySchema = z.object({
+  branchId: objectId.optional(),
+});
+
 export type CreateBatchInput = z.infer<typeof createBatchSchema>;
 export type UpdateBatchInput = z.infer<typeof updateBatchSchema>;
 export type ListBatchesQuery = z.infer<typeof listBatchesQuerySchema>;
 export type FefoQuery = z.infer<typeof fefoQuerySchema>;
 export type NearExpiryQuery = z.infer<typeof nearExpiryQuerySchema>;
+export type LowStockQuery = z.infer<typeof lowStockQuerySchema>;
