@@ -14,6 +14,12 @@ const router = Router();
 router.post('/webhook', subscriptionController.webhook);
 
 router.get('/me', authenticate, subscriptionController.getMine);
+router.post(
+  '/initiate',
+  authenticate,
+  requireRole('owner'),
+  subscriptionController.initiatePayment,
+);
 router.post('/change-plan', authenticate, requireRole('owner'), subscriptionController.changePlan);
 
 export default router;

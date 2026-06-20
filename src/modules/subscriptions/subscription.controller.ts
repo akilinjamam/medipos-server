@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { subscriptionService } from './subscription.service';
-import { changePlanSchema, webhookSchema } from './subscription.validation';
+import {
+  changePlanSchema,
+  initiatePaymentSchema,
+  webhookSchema,
+} from './subscription.validation';
 
 export const subscriptionController = {
   getMine: asyncHandler(async (req: Request, res: Response) => {
@@ -13,6 +17,12 @@ export const subscriptionController = {
     const input = changePlanSchema.parse(req.body);
     const view = await subscriptionService.changePlan(req.tenantId!, input);
     res.json({ data: view });
+  }),
+
+  initiatePayment: asyncHandler(async (req: Request, res: Response) => {
+    const input = initiatePaymentSchema.parse(req.body);
+    const result = await subscriptionService.initiatePayment(req.tenantId!, input);
+    res.status(201).json({ data: result });
   }),
 
   // Public endpoint — no auth/tenant middleware (design doc §6).

@@ -3,8 +3,11 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { Store } from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 import { env, isProd } from './config/env';
+import { getRedis } from './config/redis';
+import { logger } from './utils/logger';
 import api from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
@@ -23,7 +26,19 @@ export function createApp(): Application {
   app.use(cookieParser());
   app.use(morgan(isProd ? 'combined' : 'dev'));
 
-  // Baseline API rate limiting (design doc §2 — gateway concern).
+  // Baseline API rate limiting (design doc §2 — gateway concern). Backed by
+  // Redis when available so the limit is shared across processes; otherwise the
+  // default in-memory store (per-process) is used.
+  const redis = getRedis();
+  let store: Store | undefined;
+  if (redis) {
+    // ioredis `call` wants a positional command arg; loosen it so the limiter
+    // can forward its variadic command array.
+    const sendCommand = (...args: string[]): Promise<never> =>
+      (redis.call as unknown as (...a: string[]) => Promise<never>)(...args);
+    store = new RedisStore({ prefix: 'rl:', sendCommand });
+    logger.info('API rate limiting backed by Redis');
+  }
   app.use(
     '/api',
     rateLimit({
@@ -31,6 +46,7 @@ export function createApp(): Application {
       limit: 1000,
       standardHeaders: true,
       legacyHeaders: false,
+      ...(store ? { store } : {}),
     }),
   );
 
