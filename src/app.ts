@@ -37,6 +37,9 @@ export function createApp(): Application {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', uptime: process.uptime() });
   });
+  app.get('/', (_req, res) => {
+    res.json({ status: 'ok', message: 'welcome to Mediplus Server...!' });
+  });
 
   app.use('/api', api);
 
