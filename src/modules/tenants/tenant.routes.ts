@@ -10,7 +10,7 @@ import { tenantController } from './tenant.controller';
  */
 const router = Router();
 
-router.post('/', tenantController.create);
+router.post('/create-tenant', tenantController.create);
 router.get('/', tenantController.list);
 router.get('/:id', tenantController.getById);
 router.patch('/:id', tenantController.update);

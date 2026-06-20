@@ -41,7 +41,7 @@ export function createApp(): Application {
     res.json({ status: 'ok', message: 'welcome to Mediplus Server...!' });
   });
 
-  app.use('/api', api);
+  app.use('/api/v1', api);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
