@@ -22,6 +22,11 @@ export const saleController = {
     res.json({ data: sale });
   }),
 
+  invoice: asyncHandler(async (req: Request, res: Response) => {
+    const stored = await saleService.generateInvoice(req.tenantId!, req.params.id);
+    res.json({ data: stored });
+  }),
+
   create: asyncHandler(async (req: Request, res: Response) => {
     const input = createSaleSchema.parse(req.body);
     const sale = await saleService.create(req.tenantId!, req.auth!.userId, input);

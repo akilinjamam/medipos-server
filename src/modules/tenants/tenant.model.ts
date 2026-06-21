@@ -3,6 +3,18 @@ import { Plan } from '../../config/planFeatures';
 
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
 
+/** White-label branding (design doc §12 — Platinum) applied to invoices/reports. */
+export interface TenantBranding {
+  businessName?: string;
+  logoUrl?: string;
+  /** Hex accent colour, e.g. "#0d9488". */
+  primaryColor?: string;
+  addressLine?: string;
+  phone?: string;
+  /** Footer note printed at the bottom of invoices. */
+  invoiceFooter?: string;
+}
+
 export interface TenantDoc extends Document {
   _id: Types.ObjectId;
   name: string;
@@ -11,9 +23,22 @@ export interface TenantDoc extends Document {
   subscriptionExpiresAt?: Date;
   branchLimit: number;
   userLimit: number;
+  branding?: TenantBranding;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const brandingSchema = new Schema<TenantBranding>(
+  {
+    businessName: { type: String, trim: true },
+    logoUrl: { type: String, trim: true },
+    primaryColor: { type: String, trim: true },
+    addressLine: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    invoiceFooter: { type: String, trim: true },
+  },
+  { _id: false },
+);
 
 const tenantSchema = new Schema<TenantDoc>(
   {
@@ -27,6 +52,7 @@ const tenantSchema = new Schema<TenantDoc>(
     subscriptionExpiresAt: { type: Date },
     branchLimit: { type: Number, default: 1 },
     userLimit: { type: Number, default: 3 },
+    branding: { type: brandingSchema },
   },
   { timestamps: true },
 );

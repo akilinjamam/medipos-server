@@ -22,6 +22,7 @@ router.get('/returns/:returnId', saleController.getReturn);
 
 router.get('/', saleController.list);
 router.get('/:id', saleController.getById);
+router.get('/:id/invoice', saleController.invoice);
 router.post('/', saleController.create);
 router.post(
   '/bulk-sync',

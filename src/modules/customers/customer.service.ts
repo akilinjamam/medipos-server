@@ -56,6 +56,21 @@ export const customerService = {
     return customer;
   },
 
+  /** Prescription history for a customer (Platinum read — gated at the route). */
+  async prescriptionHistory(tenantId: string, id: string) {
+    const customer = await withTenant(
+      Customer.findById(id).select('name phone prescriptionHistory'),
+      tenantId,
+    );
+    if (!customer) throw ApiError.notFound('Customer not found');
+    return {
+      customerId: String(customer._id),
+      name: customer.name,
+      phone: customer.phone,
+      prescriptions: customer.prescriptionHistory,
+    };
+  },
+
   async addPrescription(
     tenantId: string,
     id: string,

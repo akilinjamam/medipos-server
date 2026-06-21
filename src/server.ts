@@ -1,7 +1,7 @@
 import { createApp } from './app';
 import { connectDatabase, disconnectDatabase } from './config/db';
 import { disconnectRedis } from './config/redis';
-import { startScheduler, stopScheduler } from './jobs/scheduler';
+import { startJobs, stopJobs } from './jobs';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 
@@ -13,11 +13,11 @@ async function bootstrap(): Promise<void> {
     logger.info(`API listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
 
-  startScheduler();
+  await startJobs();
 
   const shutdown = async (signal: string) => {
     logger.warn(`${signal} received — shutting down`);
-    stopScheduler();
+    await stopJobs();
     server.close(async () => {
       await disconnectDatabase();
       await disconnectRedis();

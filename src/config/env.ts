@@ -24,8 +24,19 @@ const envSchema = z.object({
   // Public base URL of this API — used to build SSLCommerz callback/IPN URLs.
   APP_BASE_URL: z.string().default('http://localhost:5000'),
 
-  // Redis (optional). When set, backs the API rate limiter (and, later, queues).
+  // Redis (optional). When set, backs the API rate limiter, the read-through
+  // cache, and the BullMQ job queue.
   REDIS_URL: z.string().optional(),
+
+  // Default TTL (seconds) for the Redis read-through cache.
+  CACHE_TTL_SECONDS: z.coerce.number().default(300),
+
+  // Recurring-job runner: "auto" uses BullMQ when REDIS_URL is set and falls
+  // back to in-process node-cron otherwise; "cron"/"bullmq" force one path.
+  JOB_RUNNER: z.enum(['auto', 'cron', 'bullmq']).default('auto'),
+
+  // BullMQ worker concurrency (jobs processed in parallel per worker process).
+  JOB_CONCURRENCY: z.coerce.number().default(1),
 
   // SSLCommerz subscription payments (optional — falls back to a disabled gateway).
   SSLCOMMERZ_STORE_ID: z.string().optional(),
@@ -35,6 +46,16 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v !== 'false'),
+
+  // AWS S3 for invoice/report PDFs (optional — falls back to local disk).
+  AWS_REGION: z.string().optional(),
+  AWS_S3_BUCKET: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  // Override the public URL base for uploaded objects (e.g. a CDN/CloudFront).
+  S3_PUBLIC_BASE_URL: z.string().optional(),
+  // Directory used by the local-disk storage fallback when S3 is unconfigured.
+  LOCAL_STORAGE_DIR: z.string().default('storage'),
 
   // SMS gateway (optional — falls back to logging only).
   SMS_API_URL: z.string().optional(),

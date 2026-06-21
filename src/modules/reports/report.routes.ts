@@ -12,7 +12,9 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/sales', requireRole('owner', 'manager'), reportController.sales);
+router.get('/sales/pdf', requireRole('owner', 'manager'), reportController.salesPdf);
 router.get('/profit-loss', requireRole('owner'), reportController.profitLoss);
+router.get('/dashboard', requireRole('owner', 'manager'), reportController.dashboard);
 router.get('/movers', requireRole('owner', 'manager'), reportController.movers);
 router.get('/expiry', requireRole('owner', 'manager'), reportController.expiry);
 router.post('/rebuild-summary', requireRole('owner'), reportController.rebuild);

@@ -2,9 +2,13 @@ import { ClientSession, FilterQuery } from 'mongoose';
 import { Sale, SaleDoc } from './sale.model';
 import { Batch } from '../batches/batch.model';
 import { Customer } from '../customers/customer.model';
+import { Product } from '../products/product.model';
+import { Tenant } from '../tenants/tenant.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { withTransaction } from '../../db/withTransaction';
 import { ApiError } from '../../utils/ApiError';
+import { generateInvoicePdf } from '../../utils/pdf';
+import { uploadBuffer, StoredObject } from '../../config/storage';
 import {
   CreateSaleInput,
   OfflineSaleInput,
@@ -136,6 +140,52 @@ export const saleService = {
     const sale = await withTenant(Sale.findById(id), tenantId);
     if (!sale) throw ApiError.notFound('Sale not found');
     return sale;
+  },
+
+  /**
+   * Generate the sale's invoice PDF and store it (design doc §4). Uploads to S3
+   * when configured, else to local disk — returning a retrievable URL. White-
+   * label branding is applied from the tenant when present.
+   */
+  async generateInvoice(tenantId: string, id: string): Promise<StoredObject> {
+    const sale = await this.getById(tenantId, id);
+    const tenant = await Tenant.findById(tenantId).select('name branding').lean();
+
+    const products = await withTenant(
+      Product.find({ _id: { $in: sale.items.map((i) => i.productId) } }).select('name'),
+      tenantId,
+    );
+    const nameById = new Map(products.map((p) => [String(p._id), p.name]));
+
+    let customerName: string | undefined;
+    if (sale.customerId) {
+      const customer = await withTenant(
+        Customer.findById(sale.customerId).select('name'),
+        tenantId,
+      );
+      customerName = customer?.name;
+    }
+
+    const pdf = await generateInvoicePdf({
+      invoiceNo: String(sale._id),
+      date: sale.createdAt,
+      tenantName: tenant?.name ?? 'MediPOS',
+      branding: tenant?.branding,
+      customerName,
+      lines: sale.items.map((i) => ({
+        name: nameById.get(String(i.productId)) ?? 'Item',
+        batchNo: i.batchNo,
+        qty: i.qty,
+        unitPrice: i.unitPrice,
+        discount: i.discount,
+      })),
+      totalAmount: sale.totalAmount,
+      paidAmount: sale.paidAmount,
+      dueAmount: sale.dueAmount,
+      paymentMethod: sale.paymentMethod,
+    });
+
+    return uploadBuffer(`invoices/${tenantId}/${sale._id}.pdf`, pdf, 'application/pdf');
   },
 
   /** Online checkout at the counter. */

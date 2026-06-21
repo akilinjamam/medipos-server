@@ -2,6 +2,7 @@ import { FilterQuery } from 'mongoose';
 import { Product, ProductDoc } from './product.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { ApiError } from '../../utils/ApiError';
+import { cached, cacheDelByPrefix, tenantCacheKey } from '../../utils/cache';
 import {
   CreateProductInput,
   UpdateProductInput,
@@ -15,12 +16,32 @@ export interface PaginatedProducts {
   total: number;
 }
 
+/** Prefix covering every cached product read for a tenant (for invalidation). */
+function productCachePrefix(tenantId: string): string {
+  return `${tenantCacheKey(tenantId, 'product')}:`;
+}
+
 /**
  * Medicine catalog (design doc §6). Tenant-scoped; supports paginated search
  * and a dedicated barcode lookup used by the POS terminal.
  */
 export const productService = {
+  // Catalog reads are cached per tenant (read-heavy at the counter) and the
+  // whole product cache is dropped on any catalog mutation.
   async list(tenantId: string, query: ListProductsQuery): Promise<PaginatedProducts> {
+    const key = tenantCacheKey(
+      tenantId,
+      'product',
+      'list',
+      query.category ?? 'all',
+      query.search ?? '',
+      query.page,
+      query.limit,
+    );
+    return cached(key, () => this.computeList(tenantId, query));
+  },
+
+  async computeList(tenantId: string, query: ListProductsQuery): Promise<PaginatedProducts> {
     const filter: FilterQuery<ProductDoc> = {};
     if (query.category) filter.category = query.category;
     if (query.search) {
@@ -44,14 +65,19 @@ export const productService = {
   },
 
   async getByBarcode(tenantId: string, barcode: string): Promise<ProductDoc> {
-    const product = await withTenant(Product.findOne({ barcode }), tenantId);
-    if (!product) throw ApiError.notFound('No product matches this barcode');
-    return product;
+    const key = tenantCacheKey(tenantId, 'product', 'barcode', barcode);
+    return cached(key, async () => {
+      const product = await withTenant(Product.findOne({ barcode }), tenantId);
+      if (!product) throw ApiError.notFound('No product matches this barcode');
+      return product;
+    });
   },
 
   async create(tenantId: string, input: CreateProductInput): Promise<ProductDoc> {
     try {
-      return await Product.create({ tenantId, ...input });
+      const product = await Product.create({ tenantId, ...input });
+      await cacheDelByPrefix(productCachePrefix(tenantId));
+      return product;
     } catch (err) {
       if ((err as { code?: number }).code === 11000) {
         throw ApiError.conflict('A product with this barcode already exists');
@@ -66,6 +92,7 @@ export const productService = {
       tenantId,
     );
     if (!product) throw ApiError.notFound('Product not found');
+    await cacheDelByPrefix(productCachePrefix(tenantId));
     return product;
   },
 };

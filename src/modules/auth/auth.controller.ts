@@ -11,7 +11,10 @@ const refreshCookieOptions: CookieOptions = {
   httpOnly: true,
   secure: isProd,
   sameSite: 'lax',
-  path: '/api/auth',
+  // Must match where the auth router is actually mounted (app.ts → "/api/v1",
+  // routes.ts → "/auth"), otherwise the browser won't send the cookie to the
+  // refresh endpoint and rotation never fires end-to-end.
+  path: '/api/v1/auth',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
@@ -33,11 +36,15 @@ export const authController = {
   refresh: asyncHandler(async (req: Request, res: Response) => {
     const token = req.cookies?.[REFRESH_COOKIE];
     if (!token) throw ApiError.unauthorized('Missing refresh token');
-    const { accessToken } = await authService.refresh(token);
+    const { accessToken, refreshToken } = await authService.refresh(token);
+    // Rotation: replace the cookie with the freshly issued refresh token.
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
     res.json({ data: { accessToken } });
   }),
 
-  logout: asyncHandler(async (_req: Request, res: Response) => {
+  logout: asyncHandler(async (req: Request, res: Response) => {
+    const token = req.cookies?.[REFRESH_COOKIE];
+    if (token) await authService.logout(token);
     res.clearCookie(REFRESH_COOKIE, { ...refreshCookieOptions, maxAge: undefined });
     res.status(204).send();
   }),

@@ -13,6 +13,8 @@ import saleRoutes from './modules/sales/sale.routes';
 import reportRoutes from './modules/reports/report.routes';
 import subscriptionRoutes from './modules/subscriptions/subscription.routes';
 import notificationRoutes from './modules/notifications/notification.routes';
+import apiTokenRoutes from './modules/apiTokens/apiToken.routes';
+import transferRoutes from './modules/transfers/transfer.routes';
 
 /**
  * Central API router. Mount each feature module here as it is built out
@@ -78,6 +80,14 @@ const routes: TRoutes[] = [
   {
     route: '/notifications',
     modules: notificationRoutes,
+  },
+  {
+    route: '/api-tokens',
+    modules: apiTokenRoutes,
+  },
+  {
+    route: '/transfers',
+    modules: transferRoutes,
   },
 ];
 

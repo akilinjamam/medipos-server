@@ -39,6 +39,11 @@ export const customerController = {
     res.json({ data: customer });
   }),
 
+  prescriptionHistory: asyncHandler(async (req: Request, res: Response) => {
+    const data = await customerService.prescriptionHistory(req.tenantId!, req.params.id);
+    res.json({ data });
+  }),
+
   addPrescription: asyncHandler(async (req: Request, res: Response) => {
     const input = addPrescriptionSchema.parse(req.body);
     const customer = await customerService.addPrescription(req.tenantId!, req.params.id, input);

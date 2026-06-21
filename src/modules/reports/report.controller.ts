@@ -31,9 +31,20 @@ export const reportController = {
     });
   }),
 
+  salesPdf: asyncHandler(async (req: Request, res: Response) => {
+    const query = dateRangeSchema.parse(req.query);
+    const stored = await reportService.salesReportPdf(req.tenantId!, query);
+    res.json({ data: stored });
+  }),
+
   movers: asyncHandler(async (req: Request, res: Response) => {
     const query = moversQuerySchema.parse(req.query);
     const data = await reportService.movers(req.tenantId!, query);
+    res.json({ data });
+  }),
+
+  dashboard: asyncHandler(async (req: Request, res: Response) => {
+    const data = await reportService.dashboard(req.tenantId!);
     res.json({ data });
   }),
 

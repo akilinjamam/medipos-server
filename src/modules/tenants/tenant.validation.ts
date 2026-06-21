@@ -12,5 +12,18 @@ export const updateTenantSchema = createTenantSchema.partial().extend({
   subscriptionExpiresAt: z.coerce.date().optional(),
 });
 
+export const updateBrandingSchema = z.object({
+  businessName: z.string().max(120).optional(),
+  logoUrl: z.string().url().optional(),
+  primaryColor: z
+    .string()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Must be a hex colour like #0d9488')
+    .optional(),
+  addressLine: z.string().max(240).optional(),
+  phone: z.string().max(40).optional(),
+  invoiceFooter: z.string().max(280).optional(),
+});
+
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;
 export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;
+export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;

@@ -15,12 +15,37 @@ export interface PlanFeatures {
   smsAlerts: boolean;
   /** Programmatic API token access. */
   apiAccess: boolean;
+  /** Custom branding (logo/colors/business name) on invoices & reports. */
+  whiteLabeling: boolean;
+  /** Customer prescription history read/export. */
+  prescriptionHistory: boolean;
 }
 
 export type FeatureName = keyof PlanFeatures;
 
 export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
-  silver: { branches: 1, offlineMode: false, smsAlerts: false, apiAccess: false },
-  gold: { branches: 5, offlineMode: true, smsAlerts: true, apiAccess: false },
-  platinum: { branches: Infinity, offlineMode: true, smsAlerts: true, apiAccess: true },
+  silver: {
+    branches: 1,
+    offlineMode: false,
+    smsAlerts: false,
+    apiAccess: false,
+    whiteLabeling: false,
+    prescriptionHistory: false,
+  },
+  gold: {
+    branches: 5,
+    offlineMode: true,
+    smsAlerts: true,
+    apiAccess: false,
+    whiteLabeling: false,
+    prescriptionHistory: false,
+  },
+  platinum: {
+    branches: Infinity,
+    offlineMode: true,
+    smsAlerts: true,
+    apiAccess: true,
+    whiteLabeling: true,
+    prescriptionHistory: true,
+  },
 };

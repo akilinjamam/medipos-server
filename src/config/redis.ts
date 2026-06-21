@@ -4,8 +4,10 @@ import { logger } from '../utils/logger';
 
 /**
  * Shared Redis client (design doc §2). Optional: only created when `REDIS_URL`
- * is set, so local/dev runs work without Redis. Today it backs the API rate
- * limiter; the same client is the intended home for the BullMQ queue + cache.
+ * is set, so local/dev runs work without Redis. Backs the API rate limiter and
+ * the read-through cache (`utils/cache.ts`). The BullMQ queue (`jobs/queue.ts`)
+ * needs `maxRetriesPerRequest: null` for its blocking commands, so it owns a
+ * separate connection rather than sharing this one.
  */
 let client: Redis | null = null;
 
