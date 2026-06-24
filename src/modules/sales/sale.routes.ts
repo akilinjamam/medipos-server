@@ -24,12 +24,7 @@ router.get('/', saleController.list);
 router.get('/:id', saleController.getById);
 router.get('/:id/invoice', saleController.invoice);
 router.post('/', saleController.create);
-router.post(
-  '/bulk-sync',
-  resolveTenant,
-  requireFeature('offlineMode'),
-  saleController.bulkSync,
-);
+router.post('/bulk-sync', resolveTenant, requireFeature('offlineMode'), saleController.bulkSync);
 router.post('/:id/returns', requireRole('owner', 'manager'), saleController.createReturn);
 
 export default router;

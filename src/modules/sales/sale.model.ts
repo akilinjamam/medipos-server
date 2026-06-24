@@ -82,6 +82,13 @@ saleSchema.plugin(tenantScopePlugin);
 // Sales history / reporting by branch over time.
 saleSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
 // Idempotent offline sync: a client UUID maps to at most one sale per tenant.
-saleSchema.index({ tenantId: 1, clientUuid: 1 }, { unique: true, sparse: true });
+// PARTIAL (not sparse): a sparse *compound* index isn't skipped here because
+// `tenantId` is always present, so online sales (no clientUuid) would all index
+// as { tenant, null } and collide on the 2nd one. Restrict uniqueness to docs
+// that actually have a clientUuid (offline-synced sales).
+saleSchema.index(
+  { tenantId: 1, clientUuid: 1 },
+  { unique: true, partialFilterExpression: { clientUuid: { $type: 'string' } } },
+);
 
 export const Sale = model<SaleDoc>('Sale', saleSchema);

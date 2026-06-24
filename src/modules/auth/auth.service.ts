@@ -173,10 +173,7 @@ export const authService = {
     try {
       const decoded = verifyRefreshToken(refreshToken);
       await withTenant(
-        RefreshToken.updateOne(
-          { jti: decoded.jti },
-          { $set: { revokedAt: new Date() } },
-        ),
+        RefreshToken.updateOne({ jti: decoded.jti }, { $set: { revokedAt: new Date() } }),
         decoded.tenantId,
       );
     } catch {
