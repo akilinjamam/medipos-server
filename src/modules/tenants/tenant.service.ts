@@ -1,11 +1,43 @@
 import { Tenant, TenantDoc, TenantBranding } from './tenant.model';
-import { PLAN_FEATURES, Plan } from '../../config/planFeatures';
+import { PLAN_FEATURES, PlanFeatures, Plan } from '../../config/planFeatures';
 import { ApiError } from '../../utils/ApiError';
 import {
   CreateTenantInput,
   UpdateTenantInput,
   UpdateBrandingInput,
 } from './tenant.validation';
+
+/**
+ * Public shape of a tenant for the dashboard's `/tenants/me`. We serialise
+ * `_id -> id` explicitly (there's no global toJSON transform) and attach the
+ * resolved plan feature map so the client gates off the server's single source
+ * of truth (design doc §8) rather than a hand-maintained mirror.
+ */
+export interface CurrentTenant {
+  id: string;
+  name: string;
+  plan: Plan;
+  subscriptionStatus: TenantDoc['subscriptionStatus'];
+  subscriptionExpiresAt?: Date;
+  branchLimit: number;
+  userLimit: number;
+  branding?: TenantBranding;
+  features: PlanFeatures;
+}
+
+function toCurrentTenant(tenant: TenantDoc): CurrentTenant {
+  return {
+    id: String(tenant._id),
+    name: tenant.name,
+    plan: tenant.plan,
+    subscriptionStatus: tenant.subscriptionStatus,
+    subscriptionExpiresAt: tenant.subscriptionExpiresAt,
+    branchLimit: tenant.branchLimit,
+    userLimit: tenant.userLimit,
+    branding: tenant.branding,
+    features: PLAN_FEATURES[tenant.plan],
+  };
+}
 
 /**
  * Tenant management (design doc §6 — "internal/admin only"). The Tenant
@@ -31,6 +63,16 @@ export const tenantService = {
     const tenant = await Tenant.findById(id);
     if (!tenant) throw ApiError.notFound('Tenant not found');
     return tenant;
+  },
+
+  /**
+   * The authenticated user's *own* tenant (plan, subscription, limits, features).
+   * Self-scoped to `req.tenantId` from the JWT — unlike `getById`/`list`, which
+   * are admin-only reads of arbitrary tenants. Powers the dashboard's plan gating.
+   */
+  async me(tenantId: string): Promise<CurrentTenant> {
+    const tenant = await this.getById(tenantId);
+    return toCurrentTenant(tenant);
   },
 
   async update(id: string, input: UpdateTenantInput): Promise<TenantDoc> {

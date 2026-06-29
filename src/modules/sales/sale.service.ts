@@ -7,6 +7,7 @@ import { Tenant } from '../tenants/tenant.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { withTransaction } from '../../db/withTransaction';
 import { ApiError } from '../../utils/ApiError';
+import { buildSort } from '../../utils/validators';
 import { generateInvoicePdf } from '../../utils/pdf';
 import { uploadBuffer, StoredObject } from '../../config/storage';
 import {
@@ -130,10 +131,8 @@ export const saleService = {
     }
 
     const skip = (query.page - 1) * query.limit;
-    return withTenant(Sale.find(filter), tenantId)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(query.limit);
+    const sort = buildSort(query.sortBy, query.sortDir, { createdAt: -1 });
+    return withTenant(Sale.find(filter), tenantId).sort(sort).skip(skip).limit(query.limit);
   },
 
   async getById(tenantId: string, id: string): Promise<SaleDoc> {

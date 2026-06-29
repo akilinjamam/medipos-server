@@ -5,11 +5,13 @@ import {
   createSupplierSchema,
   updateSupplierSchema,
   settleDueSchema,
+  listSuppliersQuerySchema,
 } from './supplier.validation';
 
 export const supplierController = {
   list: asyncHandler(async (req: Request, res: Response) => {
-    const suppliers = await supplierService.list(req.tenantId!);
+    const query = listSuppliersQuerySchema.parse(req.query);
+    const suppliers = await supplierService.list(req.tenantId!, query);
     res.json({ data: suppliers });
   }),
 

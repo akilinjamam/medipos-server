@@ -2,6 +2,7 @@ import { FilterQuery } from 'mongoose';
 import { Customer, CustomerDoc } from './customer.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { ApiError } from '../../utils/ApiError';
+import { buildSort } from '../../utils/validators';
 import {
   CreateCustomerInput,
   UpdateCustomerInput,
@@ -24,7 +25,8 @@ export const customerService = {
     }
     if (query.hasDue === true) filter.dueBalance = { $gt: 0 };
 
-    return withTenant(Customer.find(filter), tenantId).sort({ name: 1 });
+    const sort = buildSort(query.sortBy, query.sortDir, { name: 1 });
+    return withTenant(Customer.find(filter), tenantId).sort(sort);
   },
 
   async getById(tenantId: string, id: string): Promise<CustomerDoc> {

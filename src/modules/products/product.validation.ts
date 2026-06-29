@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { paginationSchema } from '../../utils/validators';
+import { paginationSchema, sortDirSchema } from '../../utils/validators';
+
+/** Columns the products list may be sorted by (allow-list — never raw input). */
+export const PRODUCT_SORT_FIELDS = ['name', 'category', 'reorderLevel', 'createdAt'] as const;
 
 export const createProductSchema = z.object({
   name: z.string().min(1),
@@ -23,6 +26,8 @@ export const listProductsQuerySchema = paginationSchema.extend({
   // Free-text search across name / generic / brand / barcode.
   search: z.string().trim().optional(),
   category: z.enum(['OTC', 'Rx', 'Controlled']).optional(),
+  sortBy: z.enum(PRODUCT_SORT_FIELDS).optional(),
+  sortDir: sortDirSchema,
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

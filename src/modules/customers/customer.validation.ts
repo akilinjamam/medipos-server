@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { sortDirSchema } from '../../utils/validators';
+
+/** Columns the customers list may be sorted by (allow-list — never raw input). */
+export const CUSTOMER_SORT_FIELDS = ['name', 'dueBalance', 'createdAt'] as const;
 
 export const createCustomerSchema = z.object({
   name: z.string().min(1),
@@ -28,6 +32,8 @@ export const listCustomersQuerySchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
+  sortBy: z.enum(CUSTOMER_SORT_FIELDS).optional(),
+  sortDir: sortDirSchema,
 });
 
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;

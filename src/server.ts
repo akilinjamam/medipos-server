@@ -1,3 +1,6 @@
+// Must be first: registers the global toJSON (_id -> id) plugin before any
+// model schema is compiled by the imports below.
+import './db/serialization.plugin';
 import { createApp } from './app';
 import { connectDatabase, disconnectDatabase } from './config/db';
 import { disconnectRedis } from './config/redis';

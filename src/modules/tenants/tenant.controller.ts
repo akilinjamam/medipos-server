@@ -19,6 +19,12 @@ export const tenantController = {
     res.json({ data: tenants });
   }),
 
+  // The authenticated user's own tenant (plan/limits/features) for the dashboard.
+  me: asyncHandler(async (req: Request, res: Response) => {
+    const tenant = await tenantService.me(req.tenantId!);
+    res.json({ data: tenant });
+  }),
+
   getById: asyncHandler(async (req: Request, res: Response) => {
     const tenant = await tenantService.getById(req.params.id);
     res.json({ data: tenant });

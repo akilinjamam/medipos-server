@@ -2,6 +2,8 @@ import { FilterQuery } from 'mongoose';
 import { Product, ProductDoc } from './product.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { ApiError } from '../../utils/ApiError';
+import { buildSort } from '../../utils/validators';
+import { generateInternalBarcode } from '../../utils/barcode';
 import { cached, cacheDelByPrefix, tenantCacheKey } from '../../utils/cache';
 import {
   CreateProductInput,
@@ -35,6 +37,8 @@ export const productService = {
       'list',
       query.category ?? 'all',
       query.search ?? '',
+      query.sortBy ?? 'name',
+      query.sortDir ?? 'asc',
       query.page,
       query.limit,
     );
@@ -50,8 +54,9 @@ export const productService = {
     }
 
     const skip = (query.page - 1) * query.limit;
+    const sort = buildSort(query.sortBy, query.sortDir, { name: 1 });
     const [data, total] = await Promise.all([
-      withTenant(Product.find(filter), tenantId).sort({ name: 1 }).skip(skip).limit(query.limit),
+      withTenant(Product.find(filter), tenantId).sort(sort).skip(skip).limit(query.limit),
       withTenant(Product.countDocuments(filter), tenantId),
     ]);
 
@@ -74,16 +79,26 @@ export const productService = {
   },
 
   async create(tenantId: string, input: CreateProductInput): Promise<ProductDoc> {
-    try {
-      const product = await Product.create({ tenantId, ...input });
-      await cacheDelByPrefix(productCachePrefix(tenantId));
-      return product;
-    } catch (err) {
-      if ((err as { code?: number }).code === 11000) {
-        throw ApiError.conflict('A product with this barcode already exists');
+    // Barcode is auto-assigned (internal EAN-13) when the caller doesn't supply
+    // one, so every product is scannable. A supplied barcode is used as-is and a
+    // clash is a real error; an auto-generated clash is just retried.
+    const userSupplied = Boolean(input.barcode);
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const barcode = input.barcode ?? generateInternalBarcode();
+      try {
+        const product = await Product.create({ tenantId, ...input, barcode });
+        await cacheDelByPrefix(productCachePrefix(tenantId));
+        return product;
+      } catch (err) {
+        if ((err as { code?: number }).code === 11000) {
+          if (userSupplied) throw ApiError.conflict('A product with this barcode already exists');
+          continue; // generated code collided — try another
+        }
+        throw err;
       }
-      throw err;
     }
+    throw new ApiError(500, 'Could not generate a unique barcode, please try again');
   },
 
   async update(tenantId: string, id: string, input: UpdateProductInput): Promise<ProductDoc> {

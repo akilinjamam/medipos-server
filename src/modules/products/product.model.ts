@@ -42,8 +42,16 @@ const productSchema = new Schema<ProductDoc>(
 
 productSchema.plugin(tenantScopePlugin);
 
-// Barcode lookup at the counter — unique per tenant when present (sparse).
-productSchema.index({ tenantId: 1, barcode: 1 }, { unique: true, sparse: true });
+// Barcode lookup at the counter — unique per tenant *when a barcode is present*.
+// PARTIAL (not sparse): a sparse *compound* index isn't skipped for barcode-less
+// products because `tenantId` is always present, so every product without a
+// barcode would index as { tenant, null } and the 2nd such product collides.
+// Restrict uniqueness to docs whose barcode is actually a string (same fix as
+// the Sale `clientUuid` index).
+productSchema.index(
+  { tenantId: 1, barcode: 1 },
+  { unique: true, partialFilterExpression: { barcode: { $type: 'string' } } },
+);
 // Catalog search by name / generic name.
 productSchema.index({ tenantId: 1, name: 1 });
 productSchema.index({ tenantId: 1, genericName: 1 });

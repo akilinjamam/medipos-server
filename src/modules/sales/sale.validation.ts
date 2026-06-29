@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { objectId, paginationSchema } from '../../utils/validators';
+import { objectId, paginationSchema, sortDirSchema } from '../../utils/validators';
+
+/** Columns the sales list may be sorted by (allow-list — never raw input). */
+export const SALE_SORT_FIELDS = ['createdAt', 'totalAmount', 'dueAmount'] as const;
 
 const saleItemSchema = z.object({
   productId: objectId,
@@ -33,6 +36,8 @@ export const listSalesQuerySchema = paginationSchema.extend({
   customerId: objectId.optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+  sortBy: z.enum(SALE_SORT_FIELDS).optional(),
+  sortDir: sortDirSchema,
 });
 
 // One line of a return: which sale line (by batch) and how many units to give back.

@@ -27,6 +27,11 @@ router.put(
   tenantController.updateBranding,
 );
 
+// The authenticated tenant's own plan/limits/features. Declared before "/:id"
+// so the literal "me" isn't captured by that param route (same reason as
+// "/branding" above). Safe for any signed-in user — self-scoped to req.tenantId.
+router.get('/me', authenticate, tenantController.me);
+
 router.post('/create-tenant', tenantController.create);
 router.get('/', tenantController.list);
 router.get('/:id', tenantController.getById);

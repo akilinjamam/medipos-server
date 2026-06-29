@@ -1,15 +1,18 @@
 import { Supplier, SupplierDoc } from './supplier.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { ApiError } from '../../utils/ApiError';
+import { buildSort } from '../../utils/validators';
 import {
   CreateSupplierInput,
   UpdateSupplierInput,
   SettleDueInput,
+  ListSuppliersQuery,
 } from './supplier.validation';
 
 export const supplierService = {
-  async list(tenantId: string): Promise<SupplierDoc[]> {
-    return withTenant(Supplier.find(), tenantId).sort({ name: 1 });
+  async list(tenantId: string, query: ListSuppliersQuery = {}): Promise<SupplierDoc[]> {
+    const sort = buildSort(query.sortBy, query.sortDir, { name: 1 });
+    return withTenant(Supplier.find(), tenantId).sort(sort);
   },
 
   async getById(tenantId: string, id: string): Promise<SupplierDoc> {

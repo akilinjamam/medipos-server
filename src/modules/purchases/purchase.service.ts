@@ -5,6 +5,7 @@ import { Supplier } from '../suppliers/supplier.model';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { withTransaction } from '../../db/withTransaction';
 import { ApiError } from '../../utils/ApiError';
+import { buildSort } from '../../utils/validators';
 import { CreatePurchaseInput, ListPurchasesQuery } from './purchase.validation';
 
 function paymentStatusFor(total: number, paid: number): PurchaseDoc['paymentStatus'] {
@@ -25,7 +26,8 @@ export const purchaseService = {
     if (query.supplierId) filter.supplierId = query.supplierId;
     if (query.status) filter.status = query.status;
 
-    return withTenant(Purchase.find(filter), tenantId).sort({ createdAt: -1 });
+    const sort = buildSort(query.sortBy, query.sortDir, { createdAt: -1 });
+    return withTenant(Purchase.find(filter), tenantId).sort(sort);
   },
 
   async getById(tenantId: string, id: string): Promise<PurchaseDoc> {
