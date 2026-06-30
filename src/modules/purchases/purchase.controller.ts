@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { purchaseService } from './purchase.service';
-import { createPurchaseSchema, listPurchasesQuerySchema } from './purchase.validation';
+import {
+  createPurchaseSchema,
+  listPurchasesQuerySchema,
+  updatePurchaseSchema,
+} from './purchase.validation';
 
 export const purchaseController = {
   list: asyncHandler(async (req: Request, res: Response) => {
@@ -19,6 +23,12 @@ export const purchaseController = {
     const input = createPurchaseSchema.parse(req.body);
     const purchase = await purchaseService.create(req.tenantId!, input);
     res.status(201).json({ data: purchase });
+  }),
+
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const input = updatePurchaseSchema.parse(req.body);
+    const purchase = await purchaseService.update(req.tenantId!, req.params.id, input);
+    res.json({ data: purchase });
   }),
 
   receive: asyncHandler(async (req: Request, res: Response) => {

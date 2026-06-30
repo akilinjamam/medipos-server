@@ -14,6 +14,7 @@ router.use(authenticate);
 router.get('/', requireRole('owner', 'manager'), purchaseController.list);
 router.get('/:id', requireRole('owner', 'manager'), purchaseController.getById);
 router.post('/', requireRole('owner', 'manager'), purchaseController.create);
+router.patch('/:id', requireRole('owner', 'manager'), purchaseController.update);
 router.post('/:id/receive', requireRole('owner', 'manager'), purchaseController.receive);
 router.post('/:id/cancel', requireRole('owner', 'manager'), purchaseController.cancel);
 

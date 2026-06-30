@@ -6,7 +6,7 @@ import { withTenant } from '../../db/tenantScope.plugin';
 import { withTransaction } from '../../db/withTransaction';
 import { ApiError } from '../../utils/ApiError';
 import { buildSort } from '../../utils/validators';
-import { CreatePurchaseInput, ListPurchasesQuery } from './purchase.validation';
+import { CreatePurchaseInput, ListPurchasesQuery, UpdatePurchaseInput } from './purchase.validation';
 
 function paymentStatusFor(total: number, paid: number): PurchaseDoc['paymentStatus'] {
   if (paid <= 0) return 'unpaid';
@@ -52,6 +52,35 @@ export const purchaseService = {
       paymentStatus: paymentStatusFor(totalAmount, input.amountPaid),
       status: 'pending',
     });
+  },
+
+  /**
+   * Full edit of a still-pending PO. Pending purchases have touched no stock or
+   * supplier ledger yet, so a plain replace is safe (no transaction needed); a
+   * received/cancelled PO is locked. Totals and payment status are recomputed.
+   */
+  async update(tenantId: string, id: string, input: UpdatePurchaseInput): Promise<PurchaseDoc> {
+    const purchase = await withTenant(Purchase.findById(id), tenantId);
+    if (!purchase) throw ApiError.notFound('Purchase not found');
+    if (purchase.status !== 'pending') {
+      throw ApiError.badRequest(`Cannot edit a ${purchase.status} purchase`);
+    }
+
+    const totalAmount = input.items.reduce((sum, it) => sum + it.costPrice * it.qty, 0);
+    if (input.amountPaid > totalAmount) {
+      throw ApiError.badRequest('amountPaid cannot exceed the purchase total');
+    }
+
+    purchase.set({
+      branchId: input.branchId,
+      supplierId: input.supplierId,
+      items: input.items,
+      totalAmount,
+      amountPaid: input.amountPaid,
+      paymentStatus: paymentStatusFor(totalAmount, input.amountPaid),
+    });
+    await purchase.save();
+    return purchase;
   },
 
   /**

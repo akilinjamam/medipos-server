@@ -5,11 +5,7 @@ import { ApiError } from '../../utils/ApiError';
 import { buildSort } from '../../utils/validators';
 import { generateInternalBarcode } from '../../utils/barcode';
 import { cached, cacheDelByPrefix, tenantCacheKey } from '../../utils/cache';
-import {
-  CreateProductInput,
-  UpdateProductInput,
-  ListProductsQuery,
-} from './product.validation';
+import { CreateProductInput, UpdateProductInput, ListProductsQuery } from './product.validation';
 
 export interface PaginatedProducts {
   data: ProductDoc[];
@@ -54,7 +50,7 @@ export const productService = {
     }
 
     const skip = (query.page - 1) * query.limit;
-    const sort = buildSort(query.sortBy, query.sortDir, { name: 1 });
+    const sort = buildSort(query.sortBy, query.sortDir, { name: -1 });
     const [data, total] = await Promise.all([
       withTenant(Product.find(filter), tenantId).sort(sort).skip(skip).limit(query.limit),
       withTenant(Product.countDocuments(filter), tenantId),

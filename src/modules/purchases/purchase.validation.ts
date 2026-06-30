@@ -20,6 +20,9 @@ export const createPurchaseSchema = z.object({
   amountPaid: z.number().min(0).default(0),
 });
 
+/** Editing is a full replace of the editable fields — only allowed while pending. */
+export const updatePurchaseSchema = createPurchaseSchema;
+
 export const listPurchasesQuerySchema = z.object({
   branchId: objectId.optional(),
   supplierId: objectId.optional(),
@@ -29,4 +32,5 @@ export const listPurchasesQuerySchema = z.object({
 });
 
 export type CreatePurchaseInput = z.infer<typeof createPurchaseSchema>;
+export type UpdatePurchaseInput = z.infer<typeof updatePurchaseSchema>;
 export type ListPurchasesQuery = z.infer<typeof listPurchasesQuerySchema>;
