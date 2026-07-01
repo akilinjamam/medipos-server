@@ -34,6 +34,7 @@ export const bulkSyncSchema = z.object({
 export const listSalesQuerySchema = paginationSchema.extend({
   branchId: objectId.optional(),
   customerId: objectId.optional(),
+  paymentMethod: z.enum(['cash', 'bkash', 'nagad', 'card', 'due']).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   sortBy: z.enum(SALE_SORT_FIELDS).optional(),

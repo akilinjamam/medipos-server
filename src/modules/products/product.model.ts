@@ -6,6 +6,7 @@ export type ProductCategory = 'OTC' | 'Rx' | 'Controlled';
 export interface ProductDoc extends Document {
   _id: Types.ObjectId;
   tenantId: Types.ObjectId;
+  batchId: string;
   name: string;
   genericName?: string;
   brand?: string;
@@ -25,6 +26,7 @@ export interface ProductDoc extends Document {
 const productSchema = new Schema<ProductDoc>(
   {
     name: { type: String, required: true, trim: true },
+    batchId: { type: String, default: 'blank' },
     genericName: { type: String, trim: true },
     brand: { type: String, trim: true },
     manufacturer: { type: String, trim: true },

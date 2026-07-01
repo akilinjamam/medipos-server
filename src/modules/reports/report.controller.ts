@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
+import { deliverPdf } from '../../utils/pdfDelivery';
 import { reportService } from './report.service';
 import {
   dateRangeSchema,
@@ -33,8 +34,8 @@ export const reportController = {
 
   salesPdf: asyncHandler(async (req: Request, res: Response) => {
     const query = dateRangeSchema.parse(req.query);
-    const stored = await reportService.salesReportPdf(req.tenantId!, query);
-    res.json({ data: stored });
+    const pdf = await reportService.salesReportPdf(req.tenantId!, query);
+    await deliverPdf(res, pdf);
   }),
 
   movers: asyncHandler(async (req: Request, res: Response) => {

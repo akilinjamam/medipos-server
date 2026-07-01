@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
+import { deliverPdf } from '../../utils/pdfDelivery';
 import { productService } from './product.service';
 import {
   createProductSchema,
   updateProductSchema,
   listProductsQuerySchema,
+  bulkDeleteProductsSchema,
 } from './product.validation';
 
 export const productController = {
@@ -12,6 +14,12 @@ export const productController = {
     const query = listProductsQuerySchema.parse(req.query);
     const result = await productService.list(req.tenantId!, query);
     res.json(result);
+  }),
+
+  exportPdf: asyncHandler(async (req: Request, res: Response) => {
+    const query = listProductsQuerySchema.parse(req.query);
+    const pdf = await productService.exportPdf(req.tenantId!, query);
+    await deliverPdf(res, pdf);
   }),
 
   getById: asyncHandler(async (req: Request, res: Response) => {
@@ -34,5 +42,16 @@ export const productController = {
     const input = updateProductSchema.parse(req.body);
     const product = await productService.update(req.tenantId!, req.params.id, input);
     res.json({ data: product });
+  }),
+
+  bulkRemove: asyncHandler(async (req: Request, res: Response) => {
+    const { ids } = bulkDeleteProductsSchema.parse(req.body);
+    const result = await productService.bulkRemove(req.tenantId!, ids);
+    res.json({ data: result });
+  }),
+
+  remove: asyncHandler(async (req: Request, res: Response) => {
+    await productService.remove(req.tenantId!, req.params.id);
+    res.status(204).send();
   }),
 };

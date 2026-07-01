@@ -3,7 +3,12 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { isProd } from '../../config/env';
 import { authService } from './auth.service';
-import { registerSchema, loginSchema } from './auth.validation';
+import {
+  registerSchema,
+  loginSchema,
+  updateProfileSchema,
+  changePasswordSchema,
+} from './auth.validation';
 
 const REFRESH_COOKIE = 'refreshToken';
 
@@ -54,5 +59,19 @@ export const authController = {
     const { userId, tenantId } = req.auth!;
     const user = await authService.me(userId, tenantId);
     res.json({ data: user });
+  }),
+
+  updateMe: asyncHandler(async (req: Request, res: Response) => {
+    const { userId, tenantId } = req.auth!;
+    const input = updateProfileSchema.parse(req.body);
+    const user = await authService.updateProfile(userId, tenantId, input);
+    res.json({ data: user });
+  }),
+
+  changePassword: asyncHandler(async (req: Request, res: Response) => {
+    const { userId, tenantId } = req.auth!;
+    const input = changePasswordSchema.parse(req.body);
+    await authService.changePassword(userId, tenantId, input.currentPassword, input.newPassword);
+    res.status(204).send();
   }),
 };

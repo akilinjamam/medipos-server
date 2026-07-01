@@ -1,6 +1,7 @@
 import { ClientSession, FilterQuery } from 'mongoose';
 import { Sale, SaleDoc } from './sale.model';
 import { Batch } from '../batches/batch.model';
+import { Branch } from '../branches/branch.model';
 import { Customer } from '../customers/customer.model';
 import { Product } from '../products/product.model';
 import { Tenant } from '../tenants/tenant.model';
@@ -8,8 +9,8 @@ import { withTenant } from '../../db/tenantScope.plugin';
 import { withTransaction } from '../../db/withTransaction';
 import { ApiError } from '../../utils/ApiError';
 import { buildSort } from '../../utils/validators';
-import { generateInvoicePdf } from '../../utils/pdf';
-import { uploadBuffer, StoredObject } from '../../config/storage';
+import { generateInvoicePdf, generateTablePdf } from '../../utils/pdf';
+import { GeneratedPdf } from '../../utils/pdfDelivery';
 import {
   CreateSaleInput,
   OfflineSaleInput,
@@ -121,18 +122,65 @@ export interface SyncResult {
 
 export const saleService = {
   async list(tenantId: string, query: ListSalesQuery): Promise<SaleDoc[]> {
-    const filter: FilterQuery<SaleDoc> = {};
-    if (query.branchId) filter.branchId = query.branchId;
-    if (query.customerId) filter.customerId = query.customerId;
-    if (query.from || query.to) {
-      filter.createdAt = {};
-      if (query.from) filter.createdAt.$gte = query.from;
-      if (query.to) filter.createdAt.$lte = query.to;
-    }
-
+    const filter = buildSaleFilter(query);
     const skip = (query.page - 1) * query.limit;
     const sort = buildSort(query.sortBy, query.sortDir, { createdAt: -1 });
     return withTenant(Sale.find(filter), tenantId).sort(sort).skip(skip).limit(query.limit);
+  },
+
+  /**
+   * The full (unpaginated) sales history matching the same filters as `list` —
+   * used for the PDF export so the file isn't clipped to one page.
+   */
+  async listAll(tenantId: string, query: ListSalesQuery): Promise<SaleDoc[]> {
+    const filter = buildSaleFilter(query);
+    const sort = buildSort(query.sortBy, query.sortDir, { createdAt: -1 });
+    return withTenant(Sale.find(filter), tenantId).sort(sort);
+  },
+
+  /** Render the filtered sales history as a PDF (buffer + storage metadata). */
+  async exportPdf(tenantId: string, query: ListSalesQuery): Promise<GeneratedPdf> {
+    const [sales, branches, tenant] = await Promise.all([
+      this.listAll(tenantId, query),
+      withTenant(Branch.find({}).select('name'), tenantId),
+      Tenant.findById(tenantId).select('name branding').lean(),
+    ]);
+
+    const branchName = new Map(branches.map((b) => [String(b._id), b.name]));
+
+    const pdf = await generateTablePdf({
+      title: 'Sales History',
+      subtitle: `${sales.length} sale(s)`,
+      tenantName: tenant?.name ?? 'MediPOS',
+      branding: tenant?.branding,
+      columns: [
+        { header: 'Invoice', x: 50, width: 75 },
+        { header: 'Date', x: 130, width: 65 },
+        { header: 'Branch', x: 200, width: 105 },
+        { header: 'Payment', x: 310, width: 55 },
+        { header: 'Status', x: 370, width: 55 },
+        { header: 'Items', x: 425, width: 35, align: 'right' },
+        { header: 'Total', x: 465, width: 45, align: 'right' },
+        { header: 'Due', x: 515, width: 30, align: 'right' },
+      ],
+      rows: sales.map((s) => [
+        String(s._id).slice(-6).toUpperCase(),
+        s.createdAt.toISOString().slice(0, 10),
+        branchName.get(String(s.branchId)) ?? String(s.branchId),
+        s.paymentMethod,
+        s.returnStatus === 'none' ? '—' : s.returnStatus,
+        String(s.items.length),
+        s.totalAmount.toFixed(2),
+        s.dueAmount > 0 ? s.dueAmount.toFixed(2) : '—',
+      ]),
+    });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    return {
+      buffer: pdf,
+      key: `sales/${tenantId}/sales-${Date.now()}.pdf`,
+      filename: `sales-${stamp}.pdf`,
+    };
   },
 
   async getById(tenantId: string, id: string): Promise<SaleDoc> {
@@ -142,11 +190,12 @@ export const saleService = {
   },
 
   /**
-   * Generate the sale's invoice PDF and store it (design doc §4). Uploads to S3
-   * when configured, else to local disk — returning a retrievable URL. White-
-   * label branding is applied from the tenant when present.
+   * Generate the sale's invoice PDF (design doc §4). Returns the buffer +
+   * storage metadata; the controller (via `deliverPdf`) archives it to S3 when
+   * configured, otherwise streams it to the browser. White-label branding is
+   * applied from the tenant when present.
    */
-  async generateInvoice(tenantId: string, id: string): Promise<StoredObject> {
+  async generateInvoice(tenantId: string, id: string): Promise<GeneratedPdf> {
     const sale = await this.getById(tenantId, id);
     const tenant = await Tenant.findById(tenantId).select('name branding').lean();
 
@@ -184,7 +233,11 @@ export const saleService = {
       paymentMethod: sale.paymentMethod,
     });
 
-    return uploadBuffer(`invoices/${tenantId}/${sale._id}.pdf`, pdf, 'application/pdf');
+    return {
+      buffer: pdf,
+      key: `invoices/${tenantId}/${sale._id}.pdf`,
+      filename: `invoice-${String(sale._id).slice(-6).toUpperCase()}.pdf`,
+    };
   },
 
   /** Online checkout at the counter. */
@@ -211,6 +264,19 @@ export const saleService = {
     return results;
   },
 };
+
+function buildSaleFilter(query: ListSalesQuery): FilterQuery<SaleDoc> {
+  const filter: FilterQuery<SaleDoc> = {};
+  if (query.branchId) filter.branchId = query.branchId;
+  if (query.customerId) filter.customerId = query.customerId;
+  if (query.paymentMethod) filter.paymentMethod = query.paymentMethod;
+  if (query.from || query.to) {
+    filter.createdAt = {};
+    if (query.from) filter.createdAt.$gte = query.from;
+    if (query.to) filter.createdAt.$lte = query.to;
+  }
+  return filter;
+}
 
 async function syncOne(
   tenantId: string,

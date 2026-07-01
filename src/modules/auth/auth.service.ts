@@ -12,7 +12,7 @@ import {
 } from '../../utils/jwt';
 import { withTenant } from '../../db/tenantScope.plugin';
 import { AuthPayload } from '../../types/express';
-import { RegisterInput, LoginInput } from './auth.validation';
+import { RegisterInput, LoginInput, UpdateProfileInput } from './auth.validation';
 
 const SALT_ROUNDS = 10;
 
@@ -185,5 +185,52 @@ export const authService = {
     const user = await User.findOne({ _id: userId, tenantId });
     if (!user) throw ApiError.notFound('User not found');
     return toPublicUser(user);
+  },
+
+  /**
+   * Self-service profile edit. Deliberately narrow — only name/email; role,
+   * branch and phone are managed by owners/managers via /api/users. An empty
+   * email string clears the field.
+   */
+  async updateProfile(
+    userId: string,
+    tenantId: string,
+    input: UpdateProfileInput,
+  ): Promise<PublicUser> {
+    const set: Record<string, unknown> = {};
+    const unset: Record<string, unknown> = {};
+    if (input.name !== undefined) set.name = input.name;
+    if (input.email !== undefined) {
+      if (input.email === '') unset.email = '';
+      else set.email = input.email;
+    }
+
+    const update: Record<string, unknown> = {};
+    if (Object.keys(set).length) update.$set = set;
+    if (Object.keys(unset).length) update.$unset = unset;
+
+    const user = await User.findOneAndUpdate({ _id: userId, tenantId }, update, {
+      new: true,
+      runValidators: true,
+    });
+    if (!user) throw ApiError.notFound('User not found');
+    return toPublicUser(user);
+  },
+
+  /** Change own password after verifying the current one. */
+  async changePassword(
+    userId: string,
+    tenantId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await User.findOne({ _id: userId, tenantId }).select('+passwordHash');
+    if (!user) throw ApiError.notFound('User not found');
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw ApiError.unauthorized('Current password is incorrect');
+
+    user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await user.save();
   },
 };

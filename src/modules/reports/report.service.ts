@@ -9,7 +9,7 @@ import { Customer } from '../customers/customer.model';
 import { Supplier } from '../suppliers/supplier.model';
 import { cached, cacheDelByPrefix, tenantCacheKey, tenantCachePrefix } from '../../utils/cache';
 import { generateReportPdf } from '../../utils/pdf';
-import { uploadBuffer, StoredObject } from '../../config/storage';
+import { GeneratedPdf } from '../../utils/pdfDelivery';
 import { DateRangeQuery, MoversQuery, ExpiryQuery } from './report.validation';
 
 function startOfUtcDay(d: Date): Date {
@@ -142,11 +142,12 @@ export const reportService = {
   },
 
   /**
-   * Export the sales/profit report as a PDF and store it (design doc §11).
-   * Reuses the cached `salesReport` numbers (no raw re-scan); uploads to S3 when
-   * configured, else local disk. Branding is applied when the tenant has it.
+   * Export the sales/profit report as a PDF (design doc §11). Reuses the cached
+   * `salesReport` numbers (no raw re-scan) and returns the buffer + storage
+   * metadata; the controller (via `deliverPdf`) archives it to S3 when configured
+   * or streams it to the browser. Branding is applied when the tenant has it.
    */
-  async salesReportPdf(tenantId: string, query: DateRangeQuery): Promise<StoredObject> {
+  async salesReportPdf(tenantId: string, query: DateRangeQuery): Promise<GeneratedPdf> {
     const report = await this.salesReport(tenantId, query);
     const tenant = await Tenant.findById(tenantId).select('name branding').lean();
 
@@ -175,7 +176,11 @@ export const reportService = {
 
     const from = report.from.toISOString().slice(0, 10);
     const to = report.to.toISOString().slice(0, 10);
-    return uploadBuffer(`reports/${tenantId}/sales-${from}_${to}.pdf`, pdf, 'application/pdf');
+    return {
+      buffer: pdf,
+      key: `reports/${tenantId}/sales-${from}_${to}.pdf`,
+      filename: `sales-report-${from}_${to}.pdf`,
+    };
   },
 
   /** Near-expiry stock report (delegates to the batch service). */

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
+import { deliverPdf } from '../../utils/pdfDelivery';
 import { batchService } from './batch.service';
 import {
   createBatchSchema,
@@ -15,6 +16,12 @@ export const batchController = {
     const query = listBatchesQuerySchema.parse(req.query);
     const batches = await batchService.list(req.tenantId!, query);
     res.json({ data: batches });
+  }),
+
+  exportPdf: asyncHandler(async (req: Request, res: Response) => {
+    const query = listBatchesQuerySchema.parse(req.query);
+    const pdf = await batchService.exportPdf(req.tenantId!, query);
+    await deliverPdf(res, pdf);
   }),
 
   getById: asyncHandler(async (req: Request, res: Response) => {

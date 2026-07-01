@@ -12,6 +12,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', batchController.list);
+router.get('/pdf', batchController.exportPdf);
 router.get('/fefo', batchController.fefo);
 router.get('/near-expiry', batchController.nearExpiry);
 router.get('/low-stock', batchController.lowStock);

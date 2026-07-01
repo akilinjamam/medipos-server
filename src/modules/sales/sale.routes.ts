@@ -21,6 +21,7 @@ router.get('/returns', saleController.listReturns);
 router.get('/returns/:returnId', saleController.getReturn);
 
 router.get('/', saleController.list);
+router.get('/pdf', saleController.exportPdf);
 router.get('/:id', saleController.getById);
 router.get('/:id/invoice', saleController.invoice);
 router.post('/', saleController.create);

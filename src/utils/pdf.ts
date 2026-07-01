@@ -197,3 +197,83 @@ export function generateReportPdf(data: ReportPdfData): Promise<Buffer> {
     doc.end();
   });
 }
+
+export interface TableColumn {
+  header: string;
+  /** Left x-offset of the column (page content runs 50 → 545 on A4). */
+  x: number;
+  /** Text box width — required for wrapping and right-alignment. */
+  width?: number;
+  align?: 'left' | 'right';
+}
+
+export interface TablePdfData {
+  title: string;
+  /** Optional line under the title (e.g. active filters / row count). */
+  subtitle?: string;
+  tenantName: string;
+  branding?: TenantBranding;
+  columns: TableColumn[];
+  /** One string per column, in column order. Pre-formatted by the caller. */
+  rows: string[][];
+}
+
+/**
+ * Render an arbitrary tabular listing (products, batches/stock, sales history)
+ * as a PDF buffer. Generic counterpart to the invoice/report renderers above —
+ * services pass pre-formatted cell strings and column geometry; this handles the
+ * branded header, column headings and page breaks. Reused by every "export the
+ * on-screen list" endpoint so the look stays consistent.
+ */
+export function generateTablePdf(data: TablePdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const accent = data.branding?.primaryColor ?? '#0d9488';
+    const colOpts = (col: TableColumn) =>
+      col.width ? { width: col.width, align: col.align ?? 'left' } : {};
+
+    doc.fillColor(accent).fontSize(18).text(data.branding?.businessName || data.tenantName);
+    doc.fillColor('#000').fontSize(13).text(data.title);
+    if (data.subtitle) doc.fontSize(10).fillColor('#444').text(data.subtitle);
+    doc
+      .fontSize(9)
+      .fillColor('#888')
+      .text(`Generated: ${new Date().toISOString().slice(0, 10)}`);
+    doc.moveDown();
+
+    const drawHeadings = (): number => {
+      const top = doc.y + 6;
+      doc.fillColor(accent).fontSize(9);
+      for (const col of data.columns) doc.text(col.header, col.x, top, colOpts(col));
+      doc.moveTo(50, top + 13).lineTo(545, top + 13).strokeColor(accent).stroke();
+      doc.fillColor('#000');
+      return top + 20;
+    };
+
+    let y = drawHeadings();
+    for (const row of data.rows) {
+      if (y > 780) {
+        doc.addPage();
+        y = drawHeadings();
+      }
+      let rowBottom = y;
+      row.forEach((cell, i) => {
+        const col = data.columns[i];
+        doc.fontSize(9).fillColor('#000').text(cell, col.x, y, colOpts(col));
+        rowBottom = Math.max(rowBottom, doc.y);
+      });
+      y = rowBottom + 6;
+    }
+
+    if (data.rows.length === 0) {
+      doc.fillColor('#888').fontSize(10).text('No records match the current filters.', 50, y + 4);
+    }
+
+    doc.end();
+  });
+}

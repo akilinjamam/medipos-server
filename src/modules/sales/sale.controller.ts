@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
+import { deliverPdf } from '../../utils/pdfDelivery';
 import { saleService } from './sale.service';
 import { saleReturnService } from './saleReturn.service';
 import {
@@ -17,14 +18,20 @@ export const saleController = {
     res.json({ data: sales });
   }),
 
+  exportPdf: asyncHandler(async (req: Request, res: Response) => {
+    const query = listSalesQuerySchema.parse(req.query);
+    const pdf = await saleService.exportPdf(req.tenantId!, query);
+    await deliverPdf(res, pdf);
+  }),
+
   getById: asyncHandler(async (req: Request, res: Response) => {
     const sale = await saleService.getById(req.tenantId!, req.params.id);
     res.json({ data: sale });
   }),
 
   invoice: asyncHandler(async (req: Request, res: Response) => {
-    const stored = await saleService.generateInvoice(req.tenantId!, req.params.id);
-    res.json({ data: stored });
+    const pdf = await saleService.generateInvoice(req.tenantId!, req.params.id);
+    await deliverPdf(res, pdf);
   }),
 
   create: asyncHandler(async (req: Request, res: Response) => {

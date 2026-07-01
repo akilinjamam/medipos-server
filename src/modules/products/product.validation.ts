@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { paginationSchema, sortDirSchema } from '../../utils/validators';
+import { objectId, paginationSchema, sortDirSchema } from '../../utils/validators';
 
 /** Columns the products list may be sorted by (allow-list — never raw input). */
 export const PRODUCT_SORT_FIELDS = ['name', 'category', 'reorderLevel', 'createdAt'] as const;
 
 export const createProductSchema = z.object({
   name: z.string().min(1),
+  batchId: z.string().optional(),
   genericName: z.string().optional(),
   brand: z.string().optional(),
   manufacturer: z.string().optional(),
@@ -30,6 +31,12 @@ export const listProductsQuerySchema = paginationSchema.extend({
   sortDir: sortDirSchema,
 });
 
+/** Hard-delete multiple products in one call. Capped to keep the guard cheap. */
+export const bulkDeleteProductsSchema = z.object({
+  ids: z.array(objectId).min(1).max(200),
+});
+
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;
+export type BulkDeleteProductsInput = z.infer<typeof bulkDeleteProductsSchema>;
