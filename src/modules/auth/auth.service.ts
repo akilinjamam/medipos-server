@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { User, UserDoc } from '../users/user.model';
-import { Tenant } from '../tenants/tenant.model';
+import { tenantService } from '../tenants/tenant.service';
 import { RefreshToken } from './refreshToken.model';
 import { ApiError } from '../../utils/ApiError';
 import {
@@ -85,7 +85,8 @@ async function issueTokens(user: UserDoc, replaces?: string): Promise<Omit<AuthR
 
 export const authService = {
   async register(input: RegisterInput): Promise<AuthResult> {
-    const tenant = await Tenant.findById(input.tenantId);
+    // input.tenantId may be the human-friendly code or a raw ObjectId.
+    const tenant = await tenantService.resolveByCodeOrId(input.tenantId);
     if (!tenant) throw ApiError.badRequest('Tenant does not exist');
 
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
@@ -93,7 +94,7 @@ export const authService = {
     let user: UserDoc;
     try {
       user = await User.create({
-        tenantId: input.tenantId,
+        tenantId: tenant._id,
         name: input.name,
         phone: input.phone,
         email: input.email,
@@ -112,8 +113,13 @@ export const authService = {
   },
 
   async login(input: LoginInput): Promise<AuthResult> {
+    // Resolve the typed tenant code (or legacy ObjectId) to the real _id; an
+    // unknown tenant reads as bad credentials so codes can't be probed.
+    const tenant = await tenantService.resolveByCodeOrId(input.tenantId);
+    if (!tenant) throw ApiError.unauthorized('Invalid credentials');
+
     // tenantId is part of the lookup, so no need for the tenant-scope plugin here.
-    const user = await User.findOne({ tenantId: input.tenantId, phone: input.phone }).select(
+    const user = await User.findOne({ tenantId: tenant._id, phone: input.phone }).select(
       '+passwordHash',
     );
     if (!user || !user.isActive) throw ApiError.unauthorized('Invalid credentials');

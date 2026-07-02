@@ -18,6 +18,12 @@ export interface TenantBranding {
 export interface TenantDoc extends Document {
   _id: Types.ObjectId;
   name: string;
+  /**
+   * Human-friendly login identifier (e.g. "MP-4K7TQ2") typed at the POS/dashboard
+   * sign-in instead of the raw ObjectId. Auth resolves it to `_id` internally.
+   * Optional only for pre-existing tenants awaiting backfill.
+   */
+  code?: string;
   plan: Plan;
   subscriptionStatus: SubscriptionStatus;
   subscriptionExpiresAt?: Date;
@@ -43,6 +49,8 @@ const brandingSchema = new Schema<TenantBranding>(
 const tenantSchema = new Schema<TenantDoc>(
   {
     name: { type: String, required: true, trim: true },
+    // Sparse so tenants created before the code existed don't collide on null.
+    code: { type: String, trim: true, uppercase: true, unique: true, sparse: true },
     plan: { type: String, enum: ['silver', 'gold', 'platinum'], default: 'silver' },
     subscriptionStatus: {
       type: String,

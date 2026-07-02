@@ -1,4 +1,5 @@
 import { Tenant, TenantDoc, TenantBranding } from './tenant.model';
+import { generateTenantCode } from './tenantCode';
 import { PLAN_FEATURES, PlanFeatures, Plan } from '../../config/planFeatures';
 import { ApiError } from '../../utils/ApiError';
 import {
@@ -16,6 +17,8 @@ import {
 export interface CurrentTenant {
   id: string;
   name: string;
+  /** Human-friendly login code (shown so owners can share it with staff). */
+  code?: string;
   plan: Plan;
   subscriptionStatus: TenantDoc['subscriptionStatus'];
   subscriptionExpiresAt?: Date;
@@ -29,6 +32,7 @@ function toCurrentTenant(tenant: TenantDoc): CurrentTenant {
   return {
     id: String(tenant._id),
     name: tenant.name,
+    code: tenant.code,
     plan: tenant.plan,
     subscriptionStatus: tenant.subscriptionStatus,
     subscriptionExpiresAt: tenant.subscriptionExpiresAt,
@@ -46,13 +50,24 @@ function toCurrentTenant(tenant: TenantDoc): CurrentTenant {
 export const tenantService = {
   async create(input: CreateTenantInput): Promise<TenantDoc> {
     const plan: Plan = input.plan ?? 'silver';
-    return Tenant.create({
-      ...input,
-      plan,
-      // Seed limits from the plan's feature map unless explicitly overridden.
-      branchLimit: input.branchLimit ?? defaultBranchLimit(plan),
-      userLimit: input.userLimit ?? 3,
-    });
+    // Retry on the (unlikely) generated-code collision; a taken custom code is
+    // the caller's problem and surfaces as a conflict instead.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await Tenant.create({
+          ...input,
+          code: input.code ?? generateTenantCode(),
+          plan,
+          // Seed limits from the plan's feature map unless explicitly overridden.
+          branchLimit: input.branchLimit ?? defaultBranchLimit(plan),
+          userLimit: input.userLimit ?? 3,
+        });
+      } catch (err) {
+        if ((err as { code?: number }).code !== 11000) throw err;
+        if (input.code) throw ApiError.conflict('Tenant code is already in use');
+        if (attempt >= 4) throw err;
+      }
+    }
   },
 
   async list(): Promise<TenantDoc[]> {
@@ -63,6 +78,17 @@ export const tenantService = {
     const tenant = await Tenant.findById(id);
     if (!tenant) throw ApiError.notFound('Tenant not found');
     return tenant;
+  },
+
+  /**
+   * Resolve what a user typed at sign-in — the human-friendly tenant code
+   * (e.g. "MP-4K7TQ2") or, for backward compatibility, a raw 24-hex ObjectId —
+   * to the tenant doc. Everything downstream keeps using the indexed `_id`;
+   * the code is only a lookup alias. Returns null when nothing matches.
+   */
+  async resolveByCodeOrId(identifier: string): Promise<TenantDoc | null> {
+    if (/^[0-9a-fA-F]{24}$/.test(identifier)) return Tenant.findById(identifier);
+    return Tenant.findOne({ code: identifier.toUpperCase() });
   },
 
   /**

@@ -1,7 +1,15 @@
 import { z } from 'zod';
+import { TENANT_CODE_REGEX } from './tenantCode';
 
 export const createTenantSchema = z.object({
   name: z.string().min(1),
+  // Optional vanity login code (e.g. "LAZZ-01"); auto-generated when omitted.
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(TENANT_CODE_REGEX, 'Code must be 3-15 letters, digits or dashes')
+    .optional(),
   plan: z.enum(['silver', 'gold', 'platinum']).optional(),
   branchLimit: z.number().int().positive().optional(),
   userLimit: z.number().int().positive().optional(),
